@@ -32,6 +32,7 @@ enum combo_events {
 
 #define NUMENT LT(_NUM, KC_ENT)
 #define SYMSPC LT(_SYM, KC_SPC)
+#define KC_QESC MT(KC_ESC, KC_Q)
 #define KC_SA LSFT_T(KC_A)
 #define KC_AS LALT_T(KC_S)
 #define KC_CD LCTL_T(KC_D)
@@ -48,10 +49,10 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     KC_Q   ,  KC_W  ,  KC_E  ,  KC_R  ,  KC_T  ,  KC_MPLY,   KC_Y  ,  KC_U  , KC_I   , KC_O   , KC_P    ,
     KC_SA  ,  KC_AS ,  KC_CD ,  KC_GF ,  KC_G  ,             KC_H  ,  KC_GJ , KC_CK  , KC_AL  , KC_SSCLN,
     KC_Z   ,  KC_X  ,  KC_C  ,  KC_V  ,  KC_B  ,             KC_N  ,  KC_M  , KC_COMM, KC_DOT , KC_SLSH ,
-                               MO(_SYM,  SYMSPC,             NUMENT, MO(_FUNC)
+                               MO(_SYM),  SYMSPC,             NUMENT, MO(_FUNC)
   ),
   [_SYM] = LAYOUT(
-    KC_RABK, KC_RCBR, KC_RBRC, KC_RPRN, KC_BSLS, _______, KC_UNDS, KC_CIRC, KC_QUOT, KC_DQUO, _______,
+    KC_RABK, KC_RCBR, KC_RBRC, KC_RPRN, KC_BSLS, _______, KC_UNDS, KC_CIRC, KC_QUOT, KC_DQUO, KC_ESC ,
 		KC_LABK, KC_LCBR, KC_LBRC, KC_LPRN, KC_SLSH,          KC_MINS, KC_ASTR, KC_PERC, KC_SCLN, _______,
     KC_HASH, KC_DLR , KC_BSLS, KC_EXLM, KC_PIPE,          KC_TILDE, KC_AT , KC_AMPR, KC_COLN, _______,
                                _______, _______,          _______, _______
@@ -70,7 +71,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   ),
 };
 
-void encoder_update_user(uint8_t index, bool clockwise) {
+bool encoder_update_user(uint8_t index, bool clockwise) {
     if (index == 0) {
         if (clockwise) {
             tap_code(KC_VOLU);
@@ -78,6 +79,7 @@ void encoder_update_user(uint8_t index, bool clockwise) {
             tap_code(KC_VOLD);
         }
     }
+    return false; 
 }
 
 #ifdef COMBO_ENABLE
@@ -93,7 +95,7 @@ combo_t key_combos[COMBO_COUNT] = {
   [COMBO_DEL] = COMBO(combo_del,KC_DEL),
   [COMBO_INS] = COMBO(combo_del,KC_INS),
   [COMBO_BSPC] = COMBO(combo_bspc,KC_BSPC),
-  [COMBO_PSCR] = COMBO(combo_numbak,KC_PSCR),
+  [COMBO_PSCR] = COMBO(combo_pscr,KC_PSCR),
 
 };
 #endif
