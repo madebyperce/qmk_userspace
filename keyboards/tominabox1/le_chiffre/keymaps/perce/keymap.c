@@ -31,7 +31,6 @@ enum combo_events {
 };
 
 #define NUMENT LT(_NUM, KC_ENT)
-#define SYMSPC LT(_SYM, KC_SPC)
 #define KC_QESC MT(KC_ESC, KC_Q)
 #define KC_SA LSFT_T(KC_A)
 #define KC_AS LALT_T(KC_S)
@@ -46,10 +45,10 @@ enum combo_events {
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   [_BASE] = LAYOUT(
-    KC_Q   ,  KC_W  ,  KC_E  ,  KC_R  ,  KC_T  ,  KC_MPLY,   KC_Y  ,  KC_U  , KC_I   , KC_O   , KC_P    ,
+    KC_QESC   ,  KC_W  ,  KC_E  ,  KC_R  ,  KC_T  ,  KC_MPLY,   KC_Y  ,  KC_U  , KC_I   , KC_O   , KC_P    ,
     KC_SA  ,  KC_AS ,  KC_CD ,  KC_GF ,  KC_G  ,             KC_H  ,  KC_GJ , KC_CK  , KC_AL  , KC_SSCLN,
     KC_Z   ,  KC_X  ,  KC_C  ,  KC_V  ,  KC_B  ,             KC_N  ,  KC_M  , KC_COMM, KC_DOT , KC_SLSH ,
-                               MO(_SYM),  SYMSPC,             NUMENT, MO(_FUNC)
+                               MO(_SYM), KC_SPC,             NUMENT, MO(_FUNC)
   ),
   [_SYM] = LAYOUT(
     KC_RABK, KC_RCBR, KC_RBRC, KC_RPRN, KC_BSLS, _______, KC_UNDS, KC_CIRC, KC_QUOT, KC_DQUO, KC_ESC ,
@@ -64,8 +63,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                                _______, _______,          _______, _______
   ),
   [_FUNC] = LAYOUT(
-    KC_HOME,  KC_UP,  KC_END ,  WINLFT,  WINRHT, _______, _______, _______, _______, _______, _______,
-    KC_LEFT, KC_DOWN, KC_RGHT, _______, _______,          _______, _______, _______, _______, _______,
+    _______, KC_HOME,  KC_UP,  KC_END , _______, _______, _______, _______, _______, _______, _______,
+    _______, KC_LEFT, KC_DOWN, KC_RGHT, _______,          _______, _______, _______, _______, _______,
     C(KC_Z), C(KC_X), C(KC_C), C(KC_V), _______,          _______, _______, _______, _______, _______,
                                _______, _______,          _______, _______
   ),
@@ -74,9 +73,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 bool encoder_update_user(uint8_t index, bool clockwise) {
     if (index == 0) {
         if (clockwise) {
-            tap_code(KC_VOLU);
-        } else {
             tap_code(KC_VOLD);
+        } else {
+            tap_code(KC_VOLU);
         }
     }
     return false; 
@@ -93,7 +92,7 @@ const uint16_t PROGMEM combo_pscr[] = {KC_DOT, KC_SLSH, COMBO_END};
 combo_t key_combos[COMBO_COUNT] = {
   [COMBO_TAB] = COMBO(combo_tab,KC_TAB),
   [COMBO_DEL] = COMBO(combo_del,KC_DEL),
-  [COMBO_INS] = COMBO(combo_del,KC_INS),
+  [COMBO_INS] = COMBO(combo_ins,KC_INS),
   [COMBO_BSPC] = COMBO(combo_bspc,KC_BSPC),
   [COMBO_PSCR] = COMBO(combo_pscr,KC_PSCR),
 
@@ -101,8 +100,7 @@ combo_t key_combos[COMBO_COUNT] = {
 #endif
 
 
-
-#ifdef OLED_DRIVER_ENABLE  //Special thanks to Sickbabies for this great OLED widget!
+#if defined(OLED_ENABLE)  //Special thanks to Sickbabies for this great OLED widget!
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
     return OLED_ROTATION_90;  // rotates for proper orientation
 }
@@ -121,118 +119,278 @@ void render_lechiffre_logo(void) {
   oled_write_raw_P(lechiffre_logo, sizeof(lechiffre_logo));
 }
 
-static void render_layer_status(void) {
-    oled_write_P(PSTR("-----"), false);
-    switch (get_highest_layer(layer_state)) {
-        case _BASE:
-            oled_write_ln_P(PSTR("BASE"), false);
-            break;
-        case _NUM:
-            oled_write_ln_P(PSTR(" NUM"), false);
-            break;
-				case _SYM:
-		        oled_write_ln_P(PSTR(" SYM"), false);
-		        break;
-        case _FUNC:
-            oled_write_ln_P(PSTR("FUNC"), false);
-            break;
-        default:
-            oled_write_ln_P(PSTR("?????"), false);
+void render_layer_status(void) {
+  oled_write_P(PSTR("-----"), false);
+  switch (get_highest_layer(layer_state)) {
+      case _BASE:
+          oled_write_ln_P(PSTR("BASE"), false);
+          break;
+      case _SYM:
+          oled_write_ln_P(PSTR(" SYM"), false);
+          break;
+      case _NUM:
+          oled_write_ln_P(PSTR(" NUM"), false);
+          break;
+      case _FUNC:
+          oled_write_ln_P(PSTR("FUNC"), false);
+          break;
+      default:
+          oled_write_ln_P(PSTR("?????"), false);
+  }
+}
+
+/* KEYBOARD PET START */
+
+/* settings */
+#    define MIN_WALK_SPEED      10
+#    define MIN_RUN_SPEED       40
+
+/* advanced settings */
+#    define ANIM_FRAME_DURATION 200  // how long each frame lasts in ms
+#    define ANIM_SIZE           96   // number of bytes in array. If you change sprites, minimize for adequate firmware size. max is 1024
+
+/* timers */
+uint32_t anim_timer = 0;
+
+/* current frame */
+uint8_t current_frame = 0;
+
+/* status variables */
+int   current_wpm = 0;
+led_t led_usb_state;
+
+bool isSneaking = false;
+bool isJumping  = false;
+bool showedJump = true;
+
+/* logic */
+static void render_luna(int LUNA_X, int LUNA_Y) {
+    /* Sit */
+    static const char PROGMEM sit[2][ANIM_SIZE] = {/* 'sit1', 32x22px */
+                                                   {
+                                                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x1c, 0x02, 0x05, 0x02, 0x24, 0x04, 0x04, 0x02, 0xa9, 0x1e, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x10, 0x08, 0x68, 0x10, 0x08, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x06, 0x82, 0x7c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x04, 0x0c, 0x10, 0x10, 0x20, 0x20, 0x20, 0x28, 0x3e, 0x1c, 0x20, 0x20, 0x3e, 0x0f, 0x11, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                   },
+
+                                                   /* 'sit2', 32x22px */
+                                                   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x1c, 0x02, 0x05, 0x02, 0x24, 0x04, 0x04, 0x02, 0xa9, 0x1e, 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x90, 0x08, 0x18, 0x60, 0x10, 0x08, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0e, 0x82, 0x7c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x04, 0x0c, 0x10, 0x10, 0x20, 0x20, 0x20, 0x28, 0x3e, 0x1c, 0x20, 0x20, 0x3e, 0x0f, 0x11, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
+
+    /* Walk */
+    static const char PROGMEM walk[2][ANIM_SIZE] = {/* 'walk1', 32x22px */
+                                                    {
+                                                        0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x40, 0x20, 0x10, 0x90, 0x90, 0x90, 0xa0, 0xc0, 0x80, 0x80, 0x80, 0x70, 0x08, 0x14, 0x08, 0x90, 0x10, 0x10, 0x08, 0xa4, 0x78, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x08, 0xfc, 0x01, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x18, 0xea, 0x10, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x1c, 0x20, 0x20, 0x3c, 0x0f, 0x11, 0x1f, 0x03, 0x06, 0x18, 0x20, 0x20, 0x3c, 0x0c, 0x12, 0x1e, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                    },
+
+                                                    /* 'walk2', 32x22px */
+                                                    {
+                                                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x40, 0x20, 0x20, 0x20, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x10, 0x28, 0x10, 0x20, 0x20, 0x20, 0x10, 0x48, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x20, 0xf8, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x10, 0x30, 0xd5, 0x20, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3f, 0x20, 0x30, 0x0c, 0x02, 0x05, 0x09, 0x12, 0x1e, 0x02, 0x1c, 0x14, 0x08, 0x10, 0x20, 0x2c, 0x32, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                    }};
+
+    /* Run */
+    static const char PROGMEM run[2][ANIM_SIZE] = {/* 'run1', 32x22px */
+                                                   {
+                                                       0x00, 0x00, 0x00, 0x00, 0xe0, 0x10, 0x08, 0x08, 0xc8, 0xb0, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40, 0x40, 0x3c, 0x14, 0x04, 0x08, 0x90, 0x18, 0x04, 0x08, 0xb0, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0xc4, 0xa4, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xc8, 0x58, 0x28, 0x2a, 0x10, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0e, 0x09, 0x04, 0x04, 0x04, 0x04, 0x02, 0x03, 0x02, 0x01, 0x01, 0x02, 0x02, 0x04, 0x08, 0x10, 0x26, 0x2b, 0x32, 0x04, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                   },
+
+                                                   /* 'run2', 32x22px */
+                                                   {
+                                                       0x00, 0x00, 0x00, 0xe0, 0x10, 0x10, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 0x80, 0x78, 0x28, 0x08, 0x10, 0x20, 0x30, 0x08, 0x10, 0x20, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x04, 0x08, 0x10, 0x11, 0xf9, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0xb0, 0x50, 0x55, 0x20, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0c, 0x10, 0x20, 0x28, 0x37, 0x02, 0x1e, 0x20, 0x20, 0x18, 0x0c, 0x14, 0x1e, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                   }};
+
+    /* Bark */
+    static const char PROGMEM bark[2][ANIM_SIZE] = {/* 'bark1', 32x22px */
+                                                    {
+                                                        0x00, 0xc0, 0x20, 0x10, 0xd0, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 0x40, 0x3c, 0x14, 0x04, 0x08, 0x90, 0x18, 0x04, 0x08, 0xb0, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x04, 0x08, 0x10, 0x11, 0xf9, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xc8, 0x48, 0x28, 0x2a, 0x10, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0c, 0x10, 0x20, 0x28, 0x37, 0x02, 0x02, 0x04, 0x08, 0x10, 0x26, 0x2b, 0x32, 0x04, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                    },
+
+                                                    /* 'bark2', 32x22px */
+                                                    {
+                                                        0x00, 0xe0, 0x10, 0x10, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 0x40, 0x40, 0x2c, 0x14, 0x04, 0x08, 0x90, 0x18, 0x04, 0x08, 0xb0, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x04, 0x08, 0x10, 0x11, 0xf9, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xc0, 0x48, 0x28, 0x2a, 0x10, 0x0f, 0x20, 0x4a, 0x09, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0c, 0x10, 0x20, 0x28, 0x37, 0x02, 0x02, 0x04, 0x08, 0x10, 0x26, 0x2b, 0x32, 0x04, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                    }};
+
+    /* Sneak */
+    static const char PROGMEM sneak[2][ANIM_SIZE] = {/* 'sneak1', 32x22px */
+                                                     {
+                                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x40, 0x40, 0x40, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x40, 0x40, 0x80, 0x00, 0x80, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1e, 0x21, 0xf0, 0x04, 0x02, 0x02, 0x02, 0x02, 0x03, 0x02, 0x02, 0x04, 0x04, 0x04, 0x03, 0x01, 0x00, 0x00, 0x09, 0x01, 0x80, 0x80, 0xab, 0x04, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x1c, 0x20, 0x20, 0x3c, 0x0f, 0x11, 0x1f, 0x02, 0x06, 0x18, 0x20, 0x20, 0x38, 0x08, 0x10, 0x18, 0x04, 0x04, 0x02, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00,
+                                                     },
+
+                                                     /* 'sneak2', 32x22px */
+                                                     {
+                                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x40, 0x40, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0xa0, 0x20, 0x40, 0x80, 0xc0, 0x20, 0x40, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x41, 0xf0, 0x04, 0x02, 0x02, 0x02, 0x03, 0x02, 0x02, 0x02, 0x04, 0x04, 0x02, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x40, 0x40, 0x55, 0x82, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3f, 0x20, 0x30, 0x0c, 0x02, 0x05, 0x09, 0x12, 0x1e, 0x04, 0x18, 0x10, 0x08, 0x10, 0x20, 0x28, 0x34, 0x06, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                     }};
+
+    /* animation */
+    void animate_luna(void) {
+        /* jump */
+        if (isJumping || !showedJump) {
+            /* clear */
+            oled_set_cursor(LUNA_X, LUNA_Y + 2);
+            oled_write("     ", false);
+
+            oled_set_cursor(LUNA_X, LUNA_Y - 1);
+
+            showedJump = true;
+        } else {
+            /* clear */
+            oled_set_cursor(LUNA_X, LUNA_Y - 1);
+            oled_write("     ", false);
+
+            oled_set_cursor(LUNA_X, LUNA_Y);
+        }
+
+        /* switch frame */
+        current_frame = (current_frame + 1) % 2;
+
+        /* current status */
+        if (led_usb_state.caps_lock) {
+            oled_write_raw_P(bark[current_frame], ANIM_SIZE);
+
+        } else if (isSneaking) {
+            oled_write_raw_P(sneak[current_frame], ANIM_SIZE);
+
+        } else if (current_wpm <= MIN_WALK_SPEED) {
+            oled_write_raw_P(sit[current_frame], ANIM_SIZE);
+
+        } else if (current_wpm <= MIN_RUN_SPEED) {
+            oled_write_raw_P(walk[current_frame], ANIM_SIZE);
+
+        } else {
+            oled_write_raw_P(run[current_frame], ANIM_SIZE);
+        }
+    }
+
+#    if OLED_TIMEOUT > 0
+    /* the animation prevents the normal timeout from occuring */
+    if (last_input_activity_elapsed() > OLED_TIMEOUT && last_led_activity_elapsed() > OLED_TIMEOUT) {
+        oled_off();
+        return;
+    } else {
+        oled_on();
+    }
+#    endif
+
+    /* animation timer */
+    if (timer_elapsed32(anim_timer) > ANIM_FRAME_DURATION) {
+        anim_timer = timer_read32();
+        animate_luna();
     }
 }
 
-#    define KEYLOG_LEN 11
-char     keylog_str[KEYLOG_LEN] = {};
-uint8_t  keylogs_str_idx        = 0;
-uint16_t log_timer              = 0;
+/* KEYBOARD PET END */
 
-const char code_to_name[60] = {
-    ' ', ' ', ' ', ' ', 'a', 'b', 'c', 'd', 'e', 'f',
-    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
-    'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-    'R', 'E', 'B', 'T', '_', '-', '=', '[', ']', '\\',
-    '#', ';', '\'', '`', ',', '.', '/', ' ', ' ', ' '};
+// #    define KEYLOG_LEN 11
+// char     keylog_str[KEYLOG_LEN] = {};
+// uint8_t  keylogs_str_idx        = 0;
+// uint16_t log_timer              = 0;
 
-void add_keylog(uint16_t keycode) {
-    if ((keycode >= QK_MOD_TAP && keycode <= QK_MOD_TAP_MAX) || (keycode >= QK_LAYER_TAP && keycode <= QK_LAYER_TAP_MAX)) {
-        keycode = keycode & 0xFF;
-    }
+// const char code_to_name[60] = {
+//     ' ', ' ', ' ', ' ', 'a', 'b', 'c', 'd', 'e', 'f',
+//     'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+//     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+//     '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+//     'R', 'E', 'B', 'T', '_', '-', '=', '[', ']', '\\',
+//     '#', ';', '\'', '`', ',', '.', '/', ' ', ' ', ' '};
 
-    for (uint8_t i = KEYLOG_LEN - 1; i > 0; i--) {
-        keylog_str[i] = keylog_str[i - 1];
-    }
-    if (keycode < 60) {
-        keylog_str[0] = code_to_name[keycode];
-    }
-    keylog_str[KEYLOG_LEN - 1] = 0;
+// void add_keylog(uint16_t keycode) {
+//     if ((keycode >= QK_MOD_TAP && keycode <= QK_MOD_TAP_MAX) || (keycode >= QK_LAYER_TAP && keycode <= QK_LAYER_TAP_MAX)) {
+//         keycode = keycode & 0xFF;
+//     }
 
-    log_timer = timer_read();
-}
+//     for (uint8_t i = KEYLOG_LEN - 1; i > 0; i--) {
+//         keylog_str[i] = keylog_str[i - 1];
+//     }
+//     if (keycode < 60) {
+//         keylog_str[0] = code_to_name[keycode];
+//     }
+//     keylog_str[KEYLOG_LEN - 1] = 0;
+// tus(void) {
+//     oled_write_P(PSTR("-0123-"), false);
+//     oled_write(keylog_str, false);
+// }
 
-void update_log(void) {
-    if (timer_elapsed(log_timer) > 750) {
-        add_keylog(0);
-    }
-}
+// void render_keylock_status(led_t led_state) {
+//     oled_write_P(PSTR("-----"), false);
+//     oled_write_P(PSTR("C"), led_state.caps_lock);
+// 	oled_write_P(PSTR(" "), false);
+//     oled_write_P(PSTR("N"), led_state.num_lock);
+// 	oled_write_P(PSTR(" "), false);
+//     oled_write_P(PSTR("S"), led_state.scroll_lock);
+//     //oled_write_ln_P(PSTR(" "), false);
+// }
+
+//     log_timer = timer_read();
+// }
+
+// void update_log(void) {
+//     if (timer_elapsed(log_timer) > 750) {
+//         add_keylog(0);
+//     }
+// }
 
 //Text only renders
-void render_keylogger_status(void) {
-    oled_write_P(PSTR("-----"), false);
-    oled_write(keylog_str, false);
-}
-
-void render_keylock_status(led_t led_state) {
-    oled_write_P(PSTR("-----"), false);
-    oled_write_P(PSTR("C"), led_state.caps_lock);
-	oled_write_P(PSTR(" "), false);
-    oled_write_P(PSTR("N"), led_state.num_lock);
-	oled_write_P(PSTR(" "), false);
-    oled_write_P(PSTR("S"), led_state.scroll_lock);
-    //oled_write_ln_P(PSTR(" "), false);
-}
-
+// void render_keylogger_sta
 void render_mod_status(uint8_t modifiers) {
        oled_write_P(PSTR("-----"), false);
     oled_write_ln_P(PSTR("SHFT"), (modifiers & MOD_MASK_SHIFT));
     oled_write_ln_P(PSTR("ALT"), (modifiers & MOD_MASK_ALT));
     oled_write_ln_P(PSTR("CTRL"), (modifiers & MOD_MASK_CTRL));
-    oled_write_ln_P(PSTR("GUI"), (modifiers & MOD_MASK_GUI));
+    oled_write_ln_P(PSTR("WIN"), (modifiers & MOD_MASK_GUI));
 }
 
-void oled_task_user(void) {
+bool oled_task_user(void) {
     render_lechiffre_logo();
     oled_set_cursor(0,3);
     render_layer_status();	// Renders the current keyboard state (layer, lock, caps, scroll, etc)
-	render_mod_status(get_mods()|get_oneshot_mods());
-	render_keylock_status(host_keyboard_led_state());
-	render_keylogger_status();
+  	render_mod_status(get_mods()|get_oneshot_mods());
+    current_wpm   = get_current_wpm();
+    led_usb_state = host_keyboard_led_state();
+    render_luna(0, 13);
+	// render_keylock_status(host_keyboard_led_state());
+  	// render_keylogger_status();
+    return true;
 }
 
 	bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 	  switch (keycode) {
-	    case _NUM:
-	      if (record->event.pressed) {
-	        layer_on(_NUM);
-	        update_tri_layer(_NUM, _SYM, _FUNC);
-	      } else {
-	        layer_off(_NUM);
-	        update_tri_layer(_NUM, _SYM, _FUNC);
-	      }
-	      return false;
 	    case _SYM:
 	      if (record->event.pressed) {
 	        layer_on(_SYM);
-	        update_tri_layer(_NUM, _SYM, _FUNC);
+	        update_tri_layer(_SYM, _NUM, _FUNC);
 	      } else {
 	        layer_off(_SYM);
-	        update_tri_layer(_NUM, _SYM, _FUNC);
+	        update_tri_layer(_SYM, _NUM, _FUNC);
 	      }
 	      return false;
-	    }
-			if (record->event.pressed) {
-				add_keylog(keycode);
-			}
+      case _NUM:
+	      if (record->event.pressed) {
+	        layer_on(_NUM);
+	        update_tri_layer(_SYM, _NUM, _FUNC);
+	      } else {
+	        layer_off(_NUM);
+	        update_tri_layer(_SYM, _NUM, _FUNC);
+	      }
+	      return false;
+        case KC_LCTL:
+        case KC_RCTL:
+            if (record->event.pressed) {
+                isSneaking = true;
+            } else {
+                isSneaking = false;
+            }
+            break;
+        case KC_SPC:
+            if (record->event.pressed) {
+                isJumping  = true;
+                showedJump = false;
+            } else {
+                isJumping = false;
+            }
+            break;
+      }
+			// if (record->event.pressed) {
+			// 	add_keylog(keycode);
+			// }
+      
+      
 	  return true;
 	}
 
